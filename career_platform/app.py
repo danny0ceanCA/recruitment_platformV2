@@ -14,7 +14,8 @@ UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'change-me'
+# Allow SECRET_KEY configuration via the environment for better security
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'change-me')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///career.db'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
