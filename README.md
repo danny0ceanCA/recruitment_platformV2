@@ -12,10 +12,12 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-2. Set your OpenAI API key and optional Redis connection in the environment:
+2. Set your OpenAI API key, Flask `SECRET_KEY`, and optional Redis connection in the environment:
 
 ```bash
 export OPENAI_API_KEY=your-key
+# Flask session secret
+export SECRET_KEY=your-secret
 # Redis configuration (defaults shown)
 export REDIS_HOST=localhost
 export REDIS_PORT=6379
