@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()   # <-- this will pull in the keys from .env into os.environ
+
 import os
 import json
 import math
