@@ -1,6 +1,6 @@
-Flask
-Flask-SQLAlchemy
-Flask-Login
-openai
-werkzeug
-redis
+Flask==2.3.2
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
+openai==1.10.0
+Werkzeug==2.3.7
+redis==5.0.1

@@ -55,3 +55,33 @@ def test_created_at_defaults(client):
 
         assert s.created_at is not None
         assert m.created_at is not None
+
+
+def test_password_reset(client):
+    client.post('/register', data={
+        'username': 'user2',
+        'password': 'old',
+        'name': 'User Two',
+        'school': 'Test'
+    }, follow_redirects=True)
+
+    resp = client.post('/reset_password', data={
+        'username': 'user2',
+        'password': 'new'
+    }, follow_redirects=True)
+    assert b'Password updated' in resp.data
+
+    resp = client.post('/login', data={
+        'username': 'user2',
+        'password': 'new'
+    }, follow_redirects=True)
+    assert b'Logged in as user2' in resp.data
+
+
+def test_template_routes(client):
+    resp = client.get('/register')
+    assert b'Username' in resp.data and b'Password' in resp.data
+    resp = client.get('/login')
+    assert b'Login' in resp.data
+    resp = client.get('/reset_password')
+    assert b'Reset Password' in resp.data

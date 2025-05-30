@@ -108,6 +108,27 @@ def login():
         </form>
     ''')
 
+# Simple password reset route
+@app.route('/reset_password', methods=['GET', 'POST'])
+def reset_password():
+    if request.method == 'POST':
+        username = request.form['username']
+        new_pw = request.form['password']
+        user = Staff.query.filter_by(username=username).first()
+        if user:
+            user.set_password(new_pw)
+            db.session.commit()
+            flash('Password updated')
+            return redirect(url_for('login'))
+        flash('User not found')
+    return render_template_string('''
+        <form method="post">
+            Username: <input name="username"><br>
+            New Password: <input name="password" type="password"><br>
+            <input type="submit" value="Reset Password">
+        </form>
+    ''')
+
 @app.route('/logout')
 @login_required
 def logout():
