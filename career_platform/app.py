@@ -1,7 +1,7 @@
 import os
 import json
 import math
-from flask import Flask, request, redirect, url_for, render_template_string, flash
+from flask import Flask, request, redirect, url_for, render_template, flash
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from sqlalchemy import func
 from werkzeug.utils import secure_filename
@@ -78,16 +78,7 @@ def register():
             db.session.commit()
             flash('Registered')
             return redirect(url_for('login'))
-    return render_template_string('''
-        <form method="post">
-            Username: <input name="username"><br>
-            Password: <input name="password" type="password"><br>
-            Name: <input name="name"><br>
-            School: <input name="school"><br>
-            Admin: <input type="checkbox" name="is_admin"><br>
-            <input type="submit" value="Register">
-        </form>
-    ''')
+    return render_template('register.html')
 
 # Login
 @app.route('/login', methods=['GET', 'POST'])
@@ -100,13 +91,7 @@ def login():
             login_user(user)
             return redirect(url_for('index'))
         flash('Invalid credentials')
-    return render_template_string('''
-        <form method="post">
-            Username: <input name="username"><br>
-            Password: <input name="password" type="password"><br>
-            <input type="submit" value="Login">
-        </form>
-    ''')
+    return render_template('login.html')
 
 # Simple username based password reset
 @app.route('/forgot-password', methods=['GET', 'POST'])
@@ -158,20 +143,7 @@ def index():
     students = Student.query.all()
     jobs = Job.query.all()
     matches = Match.query.all()
-    return render_template_string('''
-        <p>Logged in as {{current_user.username}}</p>
-        <p><a href="{{url_for('add_student')}}">Add Student</a> |
-        <a href="{{url_for('add_job')}}">Add Job</a> |
-        <a href="{{url_for('create_match')}}">Create Match</a> |
-
-        <a href="{{url_for('logout')}}">Logout</a></p>
-        <h3>Students</h3>
-        <ul>{% for s in students %}<li>{{s.name}} - {{s.summary}}</li>{% endfor %}</ul>
-        <h3>Jobs</h3>
-        <ul>{% for j in jobs %}<li>{{j.title}}</li>{% endfor %}</ul>
-        <h3>Matches</h3>
-        <ul>{% for m in matches %}<li>{{m.student.name}} -> {{m.job.title}} ({{'finalized' if m.finalized else 'archived' if m.archived else 'queued'}})</li>{% endfor %}</ul>
-    ''', students=students, jobs=jobs, matches=matches)
+    return render_template('dashboard.html', students=students, jobs=jobs, matches=matches)
 
 # Admin view of queued matches by job
 @app.route('/admin/matches')
@@ -185,21 +157,7 @@ def admin_matches():
     for job in jobs:
         q = Match.query.filter_by(job_id=job.id, finalized=False, archived=False).order_by(Match.score.desc())
         job_matches[job] = q.all()
-    return render_template_string('''
-        <h2>Queued Matches</h2>
-        <ul>
-        {% for job, matches in job_matches.items() %}
-            <li>{{job.title}}
-                <ul>
-                {% for m in matches %}
-                    <li>{{m.student.name}} - Score: {{'%.2f' % m.score}} [<a href="{{url_for('finalize_match', match_id=m.id)}}">finalize</a>] [<a href="{{url_for('archive_match', match_id=m.id)}}">archive</a>]</li>
-                {% endfor %}
-                </ul>
-            </li>
-        {% endfor %}
-        </ul>
-        <p><a href="{{url_for('index')}}">Back</a></p>
-    ''', job_matches=job_matches)
+    return render_template('admin_matches.html', job_matches=job_matches)
 
 @app.route('/matches/<int:match_id>/finalize')
 @login_required
@@ -251,15 +209,7 @@ def add_student():
         store_embedding(student.id, embedding)
         flash('Student added')
         return redirect(url_for('index'))
-    return render_template_string('''
-        <form method="post" enctype="multipart/form-data">
-            Name: <input name="name"><br>
-            Location: <input name="location"><br>
-            Experience: <textarea name="experience"></textarea><br>
-            Resume: <input type="file" name="resume"><br>
-            <input type="submit" value="Add">
-        </form>
-    ''')
+    return render_template('add_student.html')
 
 # OpenAI summarization
 
@@ -317,13 +267,7 @@ def add_job():
         db.session.commit()
         flash('Job added')
         return redirect(url_for('index'))
-    return render_template_string('''
-        <form method="post">
-            Title: <input name="title"><br>
-            Description: <textarea name="description"></textarea><br>
-            <input type="submit" value="Add Job">
-        </form>
-    ''')
+    return render_template('add_job.html')
 
 # Match students to jobs
 @app.route('/matches/new', methods=['GET', 'POST'])
@@ -347,13 +291,7 @@ def create_match():
         db.session.commit()
         flash('Match created')
         return redirect(url_for('index'))
-    return render_template_string('''
-        <form method="post">
-            Student: <select name="student_id">{% for s in students %}<option value="{{s.id}}">{{s.name}}</option>{% endfor %}</select><br>
-            Job: <select name="job_id">{% for j in jobs %}<option value="{{j.id}}">{{j.title}}</option>{% endfor %}</select><br>
-            <input type="submit" value="Create Match">
-        </form>
-    ''', students=students, jobs=jobs)
+    return render_template('create_match.html', students=students, jobs=jobs)
 
 @app.route('/metrics')
 @login_required
@@ -386,16 +324,13 @@ def metrics():
     placement_rate_str = f"{placement_rate*100:.2f}%" if student_count else "N/A"
     avg_time_str = f"{avg_time:.2f}" if avg_time is not None else "N/A"
 
-    return render_template_string('''
-        <h3>Metrics for {{ school }}</h3>
-        <table border="1">
-            <tr><th>Student Count</th><td>{{ student_count }}</td></tr>
-            <tr><th>Placement Rate</th><td>{{ placement_rate_str }}</td></tr>
-            <tr><th>Avg Days to Placement</th><td>{{ avg_time_str }}</td></tr>
-        </table>
-        <p><a href="{{ url_for('index') }}">Back</a></p>
-    ''', school=school, student_count=student_count,
-           placement_rate_str=placement_rate_str, avg_time_str=avg_time_str)
+    return render_template(
+        'metrics.html',
+        school=school,
+        student_count=student_count,
+        placement_rate_str=placement_rate_str,
+        avg_time_str=avg_time_str,
+    )
 
 if __name__ == '__main__':
     app.run(debug=True)

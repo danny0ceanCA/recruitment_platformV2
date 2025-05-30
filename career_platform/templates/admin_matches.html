@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Queued Matches{% endblock %}
+{% block content %}
+<h2>Queued Matches</h2>
+<ul>
+{% for job, matches in job_matches.items() %}
+    <li>{{ job.title }}
+        <ul>
+        {% for m in matches %}
+            <li>{{ m.student.name }} - Score: {{ '%.2f' % m.score }} [<a href="{{ url_for('finalize_match', match_id=m.id) }}">finalize</a>] [<a href="{{ url_for('archive_match', match_id=m.id) }}">archive</a>]</li>
+        {% endfor %}
+        </ul>
+    </li>
+{% endfor %}
+</ul>
+<p><a href="{{ url_for('index') }}">Back</a></p>
+{% endblock %}
