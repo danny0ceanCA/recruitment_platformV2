@@ -1,8 +1,11 @@
 import os
+import json
+import math
 from flask import Flask, request, redirect, url_for, render_template_string, flash
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
 import openai
+import redis
 
 from .models import db, Staff, Student, Job, Match
 
@@ -13,6 +16,12 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'change-me'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///career.db'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+openai.api_key = os.environ.get('OPENAI_API_KEY')
+REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
+REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
+REDIS_DB = int(os.environ.get('REDIS_DB', 0))
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB)
 
 db.init_app(app)
 
@@ -117,6 +126,8 @@ def add_student():
         student = Student(name=name, location=location, experience=experience, resume_path=path, summary=summary)
         db.session.add(student)
         db.session.commit()
+        embedding = create_embedding(summary)
+        store_embedding(student.id, embedding)
         flash('Student added')
         return redirect(url_for('index'))
     return render_template_string('''
@@ -132,16 +143,43 @@ def add_student():
 # OpenAI summarization
 
 def summarize_student(name, location, experience):
-    api_key = os.environ.get('OPENAI_API_KEY')
-    if not api_key:
+    if not openai.api_key:
         return f"{name}, {location}: {experience[:50]}..."
-    openai.api_key = api_key
     prompt = f"Summarize student {name} from {location} with experience: {experience}"
     try:
         resp = openai.Completion.create(model='text-davinci-003', prompt=prompt, max_tokens=50)
         return resp.choices[0].text.strip()
     except Exception:
         return experience[:50]
+
+def create_embedding(text):
+    if not openai.api_key:
+        return None
+    try:
+        resp = openai.Embedding.create(model='text-embedding-ada-002', input=text)
+        return resp['data'][0]['embedding']
+    except Exception:
+        return None
+
+def store_embedding(student_id, embedding):
+    if embedding is not None:
+        redis_client.set(f'embedding:{student_id}', json.dumps(embedding))
+
+def get_embedding(student_id):
+    data = redis_client.get(f'embedding:{student_id}')
+    if data:
+        return json.loads(data)
+    return None
+
+def compute_similarity(vec1, vec2):
+    if not vec1 or not vec2:
+        return 0.0
+    dot = sum(a*b for a, b in zip(vec1, vec2))
+    norm1 = math.sqrt(sum(a*a for a in vec1))
+    norm2 = math.sqrt(sum(b*b for b in vec2))
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+    return dot / (norm1 * norm2)
 
 # Admin-only job creation
 @app.route('/jobs/new', methods=['GET', 'POST'])
