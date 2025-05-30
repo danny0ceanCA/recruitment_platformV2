@@ -1,18 +1,22 @@
-from dotenv import load_dotenv
-load_dotenv()   # <-- this will pull in the keys from .env into os.environ
+# Load .env if python-dotenv is available, otherwise skip
+try:
+    from dotenv import load_dotenv
+    load_dotenv()   # pull in keys from .env into os.environ
+except ImportError:
+    pass   # <-- this will pull in the keys from .env into os.environ
 
 import os
 import json
 import math
-from flask import Flask, request, redirect, url_for, render_template, flash
+from flask import Flask, request, redirect, url_for, render_template, flash, render_template_string
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from sqlalchemy import func
 from werkzeug.utils import secure_filename
 import openai
 import redis
 
 from .models import db, Staff, Student, Job, Match
 
+# Helper to generate embeddings via OpenAI
 def embed_text(text):
     api_key = os.environ.get('OPENAI_API_KEY')
     if not api_key:
@@ -24,10 +28,10 @@ def embed_text(text):
     except Exception:
         return []
 
+# Compute cosine similarity between two vectors
 def cosine_similarity(a, b):
     if not a or not b:
         return 0.0
-    import math
     dot = sum(x*y for x, y in zip(a, b))
     norm_a = math.sqrt(sum(x*x for x in a))
     norm_b = math.sqrt(sum(x*x for x in b))
@@ -35,23 +39,35 @@ def cosine_similarity(a, b):
         return 0.0
     return dot / (norm_a * norm_b)
 
+# Ensure upload directory exists
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# Initialize Flask app
 app = Flask(__name__)
-# Allow SECRET_KEY configuration via the environment for better security
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'change-me')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///career.db'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+# Configure OpenAI and Redis
 openai.api_key = os.environ.get('OPENAI_API_KEY')
 REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
 REDIS_DB = int(os.environ.get('REDIS_DB', 0))
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB)
+REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD', None)
+redis_client = redis.Redis(
+    host=REDIS_HOST,
+    port=REDIS_PORT,
+    db=REDIS_DB,
+    password=REDIS_PASSWORD
+)
 
+# Initialize database and create tables on startup
 db.init_app(app)
+with app.app_context():
+    db.create_all()
 
+# Setup Flask-Login
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
@@ -59,11 +75,7 @@ login_manager.login_view = 'login'
 def load_user(user_id):
     return Staff.query.get(int(user_id))
 
-@app.before_first_request
-def create_tables():
-    db.create_all()
-
-# Registration
+# Registration route
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -83,7 +95,7 @@ def register():
             return redirect(url_for('login'))
     return render_template('register.html')
 
-# Login
+# Login route
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -96,7 +108,7 @@ def login():
         flash('Invalid credentials')
     return render_template('login.html')
 
-# Simple username based password reset
+# Forgot-password route
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
     if request.method == 'POST':
@@ -118,12 +130,14 @@ def forgot_password():
         </form>
     ''')
 
+# Logout route
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
     return redirect(url_for('login'))
 
+# Update-password route
 @app.route('/update-password', methods=['GET', 'POST'])
 @login_required
 def update_password():
@@ -140,6 +154,7 @@ def update_password():
         </form>
     ''')
 
+# Dashboard route
 @app.route('/')
 @login_required
 def index():
@@ -148,7 +163,7 @@ def index():
     matches = Match.query.all()
     return render_template('dashboard.html', students=students, jobs=jobs, matches=matches)
 
-# Admin view of queued matches by job
+# Admin view of matches
 @app.route('/admin/matches')
 @login_required
 def admin_matches():
@@ -156,12 +171,10 @@ def admin_matches():
         flash('Admins only')
         return redirect(url_for('index'))
     jobs = Job.query.all()
-    job_matches = {}
-    for job in jobs:
-        q = Match.query.filter_by(job_id=job.id, finalized=False, archived=False).order_by(Match.score.desc())
-        job_matches[job] = q.all()
+    job_matches = {job: Match.query.filter_by(job_id=job.id, finalized=False, archived=False).order_by(Match.score.desc()).all() for job in jobs}
     return render_template('admin_matches.html', job_matches=job_matches)
 
+# Finalize match route
 @app.route('/matches/<int:match_id>/finalize')
 @login_required
 def finalize_match(match_id):
@@ -174,6 +187,7 @@ def finalize_match(match_id):
     flash('Match finalized')
     return redirect(url_for('admin_matches'))
 
+# Archive match route
 @app.route('/matches/<int:match_id>/archive')
 @login_required
 def archive_match(match_id):
@@ -186,7 +200,7 @@ def archive_match(match_id):
     flash('Match archived')
     return redirect(url_for('admin_matches'))
 
-# Add student with resume upload
+# Add student route
 @app.route('/students/new', methods=['GET', 'POST'])
 @login_required
 def add_student():
@@ -199,14 +213,7 @@ def add_student():
         path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(path)
         summary = summarize_student(name, location, experience)
-        student = Student(
-            name=name,
-            location=location,
-            experience=experience,
-            resume_path=path,
-            summary=summary,
-            school=current_user.school,
-        )
+        student = Student(name=name, location=location, experience=experience, resume_path=path, summary=summary, school=current_user.school)
         db.session.add(student)
         db.session.commit()
         embedding = create_embedding(summary)
@@ -215,8 +222,7 @@ def add_student():
         return redirect(url_for('index'))
     return render_template('add_student.html')
 
-# OpenAI summarization
-
+# Summarize student via OpenAI
 def summarize_student(name, location, experience):
     if not openai.api_key:
         return f"{name}, {location}: {experience[:50]}..."
@@ -227,6 +233,7 @@ def summarize_student(name, location, experience):
     except Exception:
         return experience[:50]
 
+# Create embedding via OpenAI
 def create_embedding(text):
     if not openai.api_key:
         return None
@@ -236,16 +243,17 @@ def create_embedding(text):
     except Exception:
         return None
 
+# Store embedding in Redis
 def store_embedding(student_id, embedding):
     if embedding is not None:
         redis_client.set(f'embedding:{student_id}', json.dumps(embedding))
 
+# Retrieve embedding from Redis
 def get_embedding(student_id):
     data = redis_client.get(f'embedding:{student_id}')
-    if data:
-        return json.loads(data)
-    return None
+    return json.loads(data) if data else None
 
+# Compute similarity between stored and new embeddings
 def compute_similarity(vec1, vec2):
     if not vec1 or not vec2:
         return 0.0
@@ -256,9 +264,8 @@ def compute_similarity(vec1, vec2):
         return 0.0
     return dot / (norm1 * norm2)
 
-# Admin-only job creation
+# Admin-only job creation route
 @app.route('/jobs/new', methods=['GET', 'POST'])
-@login_required
 def add_job():
     if not current_user.is_admin:
         flash('Admins only')
@@ -273,7 +280,7 @@ def add_job():
         return redirect(url_for('index'))
     return render_template('add_job.html')
 
-# Match students to jobs
+# Create match route
 @app.route('/matches/new', methods=['GET', 'POST'])
 @login_required
 def create_match():
@@ -297,12 +304,12 @@ def create_match():
         return redirect(url_for('index'))
     return render_template('create_match.html', students=students, jobs=jobs)
 
+# Metrics route
 @app.route('/metrics')
 @login_required
 def metrics():
     school = current_user.school
     student_count = Student.query.filter_by(school=school).count()
-
     placed_count = (
         db.session.query(Student.id)
         .join(Match, Student.id == Match.student_id)
@@ -310,31 +317,19 @@ def metrics():
         .distinct()
         .count()
     )
-
     placement_rate = placed_count / student_count if student_count else 0
-
     students = Student.query.filter_by(school=school).all()
     diffs = []
     for s in students:
         first_match = (
-            Match.query.filter_by(student_id=s.id)
-            .order_by(Match.created_at)
-            .first()
+            Match.query.filter_by(student_id=s.id).order_by(Match.created_at).first()
         )
         if first_match:
             diffs.append((first_match.created_at - s.created_at).total_seconds() / 86400)
-
     avg_time = sum(diffs) / len(diffs) if diffs else None
     placement_rate_str = f"{placement_rate*100:.2f}%" if student_count else "N/A"
     avg_time_str = f"{avg_time:.2f}" if avg_time is not None else "N/A"
-
-    return render_template(
-        'metrics.html',
-        school=school,
-        student_count=student_count,
-        placement_rate_str=placement_rate_str,
-        avg_time_str=avg_time_str,
-    )
+    return render_template('metrics.html', school=school, student_count=student_count, placement_rate_str=placement_rate_str, avg_time_str=avg_time_str)
 
 if __name__ == '__main__':
     app.run(debug=True)
