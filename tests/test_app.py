@@ -56,7 +56,6 @@ def test_created_at_defaults(client):
         assert s.created_at is not None
         assert m.created_at is not None
 
-
 def test_school_and_match_fields(client):
     client.post('/register', data={
         'username': 'admin',
@@ -98,3 +97,49 @@ def test_school_and_match_fields(client):
         assert isinstance(match.score, float)
         assert match.finalized is False
         assert match.archived is False
+
+def test_forgot_password_resets_password(client):
+    # create a user
+    client.post('/register', data={
+        'username': 'reset',
+        'password': 'old',
+        'name': 'Reset User',
+        'school': 'Test'
+    })
+
+    with app.app_context():
+        user = Staff.query.filter_by(username='reset').first()
+        old_hash = user.password_hash
+
+    client.post('/forgot-password', data={
+        'username': 'reset',
+        'password': 'newpass'
+    }, follow_redirects=True)
+
+    with app.app_context():
+        user = Staff.query.filter_by(username='reset').first()
+        assert user.password_hash != old_hash
+        assert user.check_password('newpass')
+
+
+def test_update_password_logged_in(client):
+    client.post('/register', data={
+        'username': 'update',
+        'password': 'old',
+        'name': 'Update User',
+        'school': 'Test'
+    })
+
+    client.post('/login', data={'username': 'update', 'password': 'old'})
+
+    with app.app_context():
+        user = Staff.query.filter_by(username='update').first()
+        old_hash = user.password_hash
+
+    client.post('/update-password', data={'password': 'newpass'}, follow_redirects=True)
+
+    with app.app_context():
+        user = Staff.query.filter_by(username='update').first()
+        assert user.password_hash != old_hash
+        assert user.check_password('newpass')
+

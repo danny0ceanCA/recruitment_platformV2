@@ -108,11 +108,49 @@ def login():
         </form>
     ''')
 
+# Simple username based password reset
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        username = request.form['username']
+        new_password = request.form['password']
+        user = Staff.query.filter_by(username=username).first()
+        if user:
+            user.set_password(new_password)
+            db.session.commit()
+            flash('Password updated')
+            return redirect(url_for('login'))
+        else:
+            flash('User not found')
+    return render_template_string('''
+        <form method="post">
+            Username: <input name="username"><br>
+            New Password: <input name="password" type="password"><br>
+            <input type="submit" value="Reset Password">
+        </form>
+    ''')
+
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
     return redirect(url_for('login'))
+
+@app.route('/update-password', methods=['GET', 'POST'])
+@login_required
+def update_password():
+    if request.method == 'POST':
+        new_password = request.form['password']
+        current_user.set_password(new_password)
+        db.session.commit()
+        flash('Password updated')
+        return redirect(url_for('index'))
+    return render_template_string('''
+        <form method="post">
+            New Password: <input name="password" type="password"><br>
+            <input type="submit" value="Update Password">
+        </form>
+    ''')
 
 @app.route('/')
 @login_required
