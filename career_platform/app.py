@@ -1,6 +1,7 @@
 import os
 from flask import Flask, request, redirect, url_for, render_template_string, flash
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from sqlalchemy import func
 from werkzeug.utils import secure_filename
 import openai
 
@@ -92,6 +93,7 @@ def index():
         <p><a href="{{url_for('add_student')}}">Add Student</a> |
         <a href="{{url_for('add_job')}}">Add Job</a> |
         <a href="{{url_for('create_match')}}">Create Match</a> |
+        <a href="{{url_for('metrics')}}">Metrics</a> |
         <a href="{{url_for('logout')}}">Logout</a></p>
         <h3>Students</h3>
         <ul>{% for s in students %}<li>{{s.name}} - {{s.summary}}</li>{% endfor %}</ul>
@@ -114,7 +116,14 @@ def add_student():
         path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(path)
         summary = summarize_student(name, location, experience)
-        student = Student(name=name, location=location, experience=experience, resume_path=path, summary=summary)
+        student = Student(
+            name=name,
+            location=location,
+            experience=experience,
+            resume_path=path,
+            summary=summary,
+            school=current_user.school,
+        )
         db.session.add(student)
         db.session.commit()
         flash('Student added')
@@ -190,6 +199,48 @@ def create_match():
             <input type="submit" value="Create Match">
         </form>
     ''', students=students, jobs=jobs)
+
+@app.route('/metrics')
+@login_required
+def metrics():
+    school = current_user.school
+    student_count = Student.query.filter_by(school=school).count()
+
+    placed_count = (
+        db.session.query(Student.id)
+        .join(Match, Student.id == Match.student_id)
+        .filter(Student.school == school)
+        .distinct()
+        .count()
+    )
+
+    placement_rate = placed_count / student_count if student_count else 0
+
+    students = Student.query.filter_by(school=school).all()
+    diffs = []
+    for s in students:
+        first_match = (
+            Match.query.filter_by(student_id=s.id)
+            .order_by(Match.created_at)
+            .first()
+        )
+        if first_match:
+            diffs.append((first_match.created_at - s.created_at).total_seconds() / 86400)
+
+    avg_time = sum(diffs) / len(diffs) if diffs else None
+    placement_rate_str = f"{placement_rate*100:.2f}%" if student_count else "N/A"
+    avg_time_str = f"{avg_time:.2f}" if avg_time is not None else "N/A"
+
+    return render_template_string('''
+        <h3>Metrics for {{ school }}</h3>
+        <table border="1">
+            <tr><th>Student Count</th><td>{{ student_count }}</td></tr>
+            <tr><th>Placement Rate</th><td>{{ placement_rate_str }}</td></tr>
+            <tr><th>Avg Days to Placement</th><td>{{ avg_time_str }}</td></tr>
+        </table>
+        <p><a href="{{ url_for('index') }}">Back</a></p>
+    ''', school=school, student_count=student_count,
+           placement_rate_str=placement_rate_str, avg_time_str=avg_time_str)
 
 if __name__ == '__main__':
     app.run(debug=True)

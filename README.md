@@ -33,5 +33,6 @@ The application creates `career.db` and an `uploads/` folder in the project dire
 - Add students with resume uploads at `/students/new`.
 - Admins can add jobs at `/jobs/new` and create matches at `/matches/new`.
 - Summaries of students are generated automatically using OpenAI when adding a student.
+- Staff can view placement metrics for their school at `/metrics`.
 
 Student resumes and summaries are stored in the database and `uploads/` folder. Jobs and matches are visible only to authenticated users, with job creation and matching restricted to admins.
