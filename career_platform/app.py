@@ -294,7 +294,7 @@ def create_match():
         job_id = request.form['job_id']
         student = Student.query.get(student_id)
         job = Job.query.get(job_id)
-        student_emb = [float(x) for x in (student.embedding or '').split(',') if x]
+        student_emb = get_embedding(student.id) or []
         job_emb = embed_text(job.description)
         score = cosine_similarity(student_emb, job_emb)
         match = Match(student_id=student_id, job_id=job_id, score=score)
