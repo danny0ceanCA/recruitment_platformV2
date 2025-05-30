@@ -1,0 +1,28 @@
+body {
+    background: #001f3f;
+    color: #ffffff;
+    font-family: Arial, sans-serif;
+    background-image:
+        repeating-linear-gradient(45deg, rgba(0, 80, 160, 0.2) 0, rgba(0, 80, 160, 0.2) 2px, transparent 2px, transparent 10px);
+}
+.container {
+    width: 90%;
+    margin: auto;
+    padding: 20px;
+}
+.flashes {
+    list-style: none;
+    padding: 0;
+}
+.tile {
+    display: inline-block;
+    background: #004080;
+    color: white;
+    padding: 20px;
+    margin: 10px;
+    text-decoration: none;
+    border-radius: 5px;
+}
+.tile:hover {
+    background: #0059b3;
+}
