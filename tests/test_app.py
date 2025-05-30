@@ -2,6 +2,14 @@ import os
 import tempfile
 import pytest
 
+# skip all tests here if any of these aren’t installed
+pytest.importorskip("flask")
+pytest.importorskip("flask_login")
+pytest.importorskip("flask_sqlalchemy")
+pytest.importorskip("redis")
+pytest.importorskip("openai")
+# dotenv is now optional in your app, so you don’t strictly need to skip on it
+
 from career_platform.app import app, db, Staff, summarize_student
 from career_platform.models import Student, Job, Match
 

@@ -5,3 +5,4 @@ openai
 werkzeug
 redis
 python-dotenv
+pytest
