@@ -206,6 +206,7 @@ def add_student():
             experience=experience,
             resume_path=path,
             summary=summary,
+            school=current_user.school,
         )
         db.session.add(student)
         db.session.commit()
