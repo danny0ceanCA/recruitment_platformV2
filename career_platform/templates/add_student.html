@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}Add Student{% endblock %}
+{% block content %}
+<form method="post" enctype="multipart/form-data">
+    Name: <input name="name"><br>
+    Location: <input name="location"><br>
+    Experience: <textarea name="experience"></textarea><br>
+    Resume: <input type="file" name="resume"><br>
+    <input type="submit" value="Add">
+</form>
+{% endblock %}

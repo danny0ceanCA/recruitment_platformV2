@@ -27,7 +27,10 @@ class Student(db.Model):
     experience = db.Column(db.Text)
     resume_path = db.Column(db.String(255))
     summary = db.Column(db.Text)
+    school = db.Column(db.String(120))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    embedding = db.Column(db.Text)
+
 
 class Job(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -39,6 +42,14 @@ class Match(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('student.id'))
     job_id = db.Column(db.Integer, db.ForeignKey('job.id'))
+    score = db.Column(db.Float)
+    finalized = db.Column(db.Boolean, default=False)
+    archived = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    score = db.Column(db.Float, default=0.0)
+    finalized = db.Column(db.Boolean, default=False)
+    archived = db.Column(db.Boolean, default=False)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

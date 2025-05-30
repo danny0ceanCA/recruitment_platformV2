@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block title %}Create Match{% endblock %}
+{% block content %}
+<form method="post">
+    Student: <select name="student_id">{% for s in students %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select><br>
+    Job: <select name="job_id">{% for j in jobs %}<option value="{{ j.id }}">{{ j.title }}</option>{% endfor %}</select><br>
+    <input type="submit" value="Create Match">
+</form>
+{% endblock %}
