@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}Metrics{% endblock %}
+{% block content %}
+<h3>Metrics for {{ school }}</h3>
+<table border="1">
+    <tr><th>Student Count</th><td>{{ student_count }}</td></tr>
+    <tr><th>Placement Rate</th><td>{{ placement_rate_str }}</td></tr>
+    <tr><th>Avg Days to Placement</th><td>{{ avg_time_str }}</td></tr>
+</table>
+<p><a href="{{ url_for('index') }}">Back</a></p>
+{% endblock %}

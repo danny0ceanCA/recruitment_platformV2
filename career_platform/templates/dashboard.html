@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<p>Logged in as {{ current_user.username }}</p>
+<div class="tiles">
+    <a class="tile" href="{{ url_for('add_student') }}">Students</a>
+    <a class="tile" href="{{ url_for('add_job') }}">Jobs</a>
+    <a class="tile" href="{{ url_for('create_match') }}">Matches</a>
+    <a class="tile" href="{{ url_for('metrics') }}">Metrics</a>
+    <a class="tile" href="{{ url_for('logout') }}">Logout</a>
+</div>
+<h3>Students</h3>
+<ul>
+{% for s in students %}
+    <li>{{ s.name }} - {{ s.summary }}</li>
+{% endfor %}
+</ul>
+<h3>Jobs</h3>
+<ul>
+{% for j in jobs %}
+    <li>{{ j.title }}</li>
+{% endfor %}
+</ul>
+<h3>Matches</h3>
+<ul>
+{% for m in matches %}
+    <li>{{ m.student.name }} -> {{ m.job.title }} ({{ 'finalized' if m.finalized else 'archived' if m.archived else 'queued' }})</li>
+{% endfor %}
+</ul>
+{% endblock %}
