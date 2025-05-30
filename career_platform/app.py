@@ -253,17 +253,6 @@ def get_embedding(student_id):
     data = redis_client.get(f'embedding:{student_id}')
     return json.loads(data) if data else None
 
-# Compute similarity between stored and new embeddings
-def compute_similarity(vec1, vec2):
-    if not vec1 or not vec2:
-        return 0.0
-    dot = sum(a*b for a, b in zip(vec1, vec2))
-    norm1 = math.sqrt(sum(a*a for a in vec1))
-    norm2 = math.sqrt(sum(b*b for b in vec2))
-    if norm1 == 0 or norm2 == 0:
-        return 0.0
-    return dot / (norm1 * norm2)
-
 # Admin-only job creation route
 @app.route('/jobs/new', methods=['GET', 'POST'])
 def add_job():
