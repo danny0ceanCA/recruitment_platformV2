@@ -6,6 +6,28 @@ import openai
 
 from .models import db, Staff, Student, Job, Match
 
+def embed_text(text):
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        return []
+    openai.api_key = api_key
+    try:
+        resp = openai.Embedding.create(model='text-embedding-ada-002', input=[text])
+        return resp['data'][0]['embedding']
+    except Exception:
+        return []
+
+def cosine_similarity(a, b):
+    if not a or not b:
+        return 0.0
+    import math
+    dot = sum(x*y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x*x for x in a))
+    norm_b = math.sqrt(sum(x*x for x in b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -92,14 +114,67 @@ def index():
         <p><a href="{{url_for('add_student')}}">Add Student</a> |
         <a href="{{url_for('add_job')}}">Add Job</a> |
         <a href="{{url_for('create_match')}}">Create Match</a> |
+        {% if current_user.is_admin %}<a href="{{url_for('admin_matches')}}">Manage Matches</a> |{% endif %}
         <a href="{{url_for('logout')}}">Logout</a></p>
         <h3>Students</h3>
         <ul>{% for s in students %}<li>{{s.name}} - {{s.summary}}</li>{% endfor %}</ul>
         <h3>Jobs</h3>
         <ul>{% for j in jobs %}<li>{{j.title}}</li>{% endfor %}</ul>
         <h3>Matches</h3>
-        <ul>{% for m in matches %}<li>{{m.student.name}} -> {{m.job.title}}</li>{% endfor %}</ul>
+        <ul>{% for m in matches %}<li>{{m.student.name}} -> {{m.job.title}} ({{'finalized' if m.finalized else 'archived' if m.archived else 'queued'}})</li>{% endfor %}</ul>
     ''', students=students, jobs=jobs, matches=matches)
+
+# Admin view of queued matches by job
+@app.route('/admin/matches')
+@login_required
+def admin_matches():
+    if not current_user.is_admin:
+        flash('Admins only')
+        return redirect(url_for('index'))
+    jobs = Job.query.all()
+    job_matches = {}
+    for job in jobs:
+        q = Match.query.filter_by(job_id=job.id, finalized=False, archived=False).order_by(Match.score.desc())
+        job_matches[job] = q.all()
+    return render_template_string('''
+        <h2>Queued Matches</h2>
+        <ul>
+        {% for job, matches in job_matches.items() %}
+            <li>{{job.title}}
+                <ul>
+                {% for m in matches %}
+                    <li>{{m.student.name}} - Score: {{'%.2f' % m.score}} [<a href="{{url_for('finalize_match', match_id=m.id)}}">finalize</a>] [<a href="{{url_for('archive_match', match_id=m.id)}}">archive</a>]</li>
+                {% endfor %}
+                </ul>
+            </li>
+        {% endfor %}
+        </ul>
+        <p><a href="{{url_for('index')}}">Back</a></p>
+    ''', job_matches=job_matches)
+
+@app.route('/matches/<int:match_id>/finalize')
+@login_required
+def finalize_match(match_id):
+    if not current_user.is_admin:
+        flash('Admins only')
+        return redirect(url_for('index'))
+    m = Match.query.get_or_404(match_id)
+    m.finalized = True
+    db.session.commit()
+    flash('Match finalized')
+    return redirect(url_for('admin_matches'))
+
+@app.route('/matches/<int:match_id>/archive')
+@login_required
+def archive_match(match_id):
+    if not current_user.is_admin:
+        flash('Admins only')
+        return redirect(url_for('index'))
+    m = Match.query.get_or_404(match_id)
+    m.archived = True
+    db.session.commit()
+    flash('Match archived')
+    return redirect(url_for('admin_matches'))
 
 # Add student with resume upload
 @app.route('/students/new', methods=['GET', 'POST'])
@@ -114,7 +189,10 @@ def add_student():
         path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(path)
         summary = summarize_student(name, location, experience)
-        student = Student(name=name, location=location, experience=experience, resume_path=path, summary=summary)
+        embedding = embed_text(summary)
+        embedding_str = ','.join(str(x) for x in embedding)
+        student = Student(name=name, location=location, experience=experience, resume_path=path,
+                          summary=summary, embedding=embedding_str)
         db.session.add(student)
         db.session.commit()
         flash('Student added')
@@ -178,7 +256,12 @@ def create_match():
     if request.method == 'POST':
         student_id = request.form['student_id']
         job_id = request.form['job_id']
-        match = Match(student_id=student_id, job_id=job_id)
+        student = Student.query.get(student_id)
+        job = Job.query.get(job_id)
+        student_emb = [float(x) for x in (student.embedding or '').split(',') if x]
+        job_emb = embed_text(job.description)
+        score = cosine_similarity(student_emb, job_emb)
+        match = Match(student_id=student_id, job_id=job_id, score=score)
         db.session.add(match)
         db.session.commit()
         flash('Match created')
