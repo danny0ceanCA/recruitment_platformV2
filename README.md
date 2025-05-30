@@ -29,6 +29,7 @@ python -m career_platform.app
 ```
 
 The application creates `career.db` and an `uploads/` folder in the project directory.
+If you update the models, delete the existing `career.db` to recreate the schema.
 
 ## Usage
 
@@ -37,6 +38,8 @@ The application creates `career.db` and an `uploads/` folder in the project dire
 - Add students with resume uploads at `/students/new`.
 - Admins can add jobs at `/jobs/new` and create matches at `/matches/new`.
 - Summaries of students are generated automatically using OpenAI when adding a student.
+- Student summaries are embedded using the OpenAI embeddings API to enable similarity scoring.
+- Admins can review queued matches at `/admin/matches`, ordered by similarity score, and finalize or archive them.
 
 
 Student resumes and summaries are stored in the database and `uploads/` folder. Jobs and matches are visible only to authenticated users, with job creation and matching restricted to admins.
