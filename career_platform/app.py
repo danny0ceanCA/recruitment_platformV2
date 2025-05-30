@@ -36,7 +36,8 @@ UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'change-me'
+# Allow SECRET_KEY configuration via the environment for better security
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'change-me')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///career.db'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
@@ -199,7 +200,13 @@ def add_student():
         path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(path)
         summary = summarize_student(name, location, experience)
-
+        student = Student(
+            name=name,
+            location=location,
+            experience=experience,
+            resume_path=path,
+            summary=summary,
+        )
         db.session.add(student)
         db.session.commit()
         embedding = create_embedding(summary)

@@ -30,6 +30,7 @@ class Student(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     embedding = db.Column(db.Text)
 
+
 class Job(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(120))
@@ -43,6 +44,8 @@ class Match(db.Model):
     score = db.Column(db.Float)
     finalized = db.Column(db.Boolean, default=False)
     archived = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     student = db.relationship('Student')
