@@ -56,6 +56,47 @@ def test_created_at_defaults(client):
         assert s.created_at is not None
         assert m.created_at is not None
 
+def test_school_and_match_fields(client):
+    client.post('/register', data={
+        'username': 'admin',
+        'password': 'pass',
+        'name': 'Admin',
+        'school': 'SchoolX',
+        'is_admin': 'on'
+    }, follow_redirects=True)
+    client.post('/login', data={
+        'username': 'admin',
+        'password': 'pass'
+    }, follow_redirects=True)
+
+    client.post('/jobs/new', data={
+        'title': 'Job1',
+        'description': 'desc'
+    }, follow_redirects=True)
+
+    import io
+    student_resp = client.post('/students/new', data={
+        'name': 'Bob',
+        'location': 'NY',
+        'experience': 'Python',
+        'resume': (io.BytesIO(b'data'), 'resume.txt')
+    }, content_type='multipart/form-data', follow_redirects=True)
+
+    with app.app_context():
+        student = Student.query.filter_by(name='Bob').first()
+        job = Job.query.filter_by(title='Job1').first()
+        assert student.school == 'SchoolX'
+
+    client.post('/matches/new', data={
+        'student_id': student.id,
+        'job_id': job.id
+    }, follow_redirects=True)
+
+    with app.app_context():
+        match = Match.query.filter_by(student_id=student.id, job_id=job.id).first()
+        assert isinstance(match.score, float)
+        assert match.finalized is False
+        assert match.archived is False
 
 def test_forgot_password_resets_password(client):
     # create a user
@@ -101,3 +142,4 @@ def test_update_password_logged_in(client):
         user = Staff.query.filter_by(username='update').first()
         assert user.password_hash != old_hash
         assert user.check_password('newpass')
+
