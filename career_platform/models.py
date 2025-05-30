@@ -1,3 +1,4 @@
+from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -26,6 +27,8 @@ class Student(db.Model):
     experience = db.Column(db.Text)
     resume_path = db.Column(db.String(255))
     summary = db.Column(db.Text)
+    school = db.Column(db.String(120))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Job(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -37,5 +40,6 @@ class Match(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('student.id'))
     job_id = db.Column(db.Integer, db.ForeignKey('job.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     student = db.relationship('Student')
     job = db.relationship('Job')
