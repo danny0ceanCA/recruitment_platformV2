@@ -1,8 +1,12 @@
 import os
+import json
+import math
 from flask import Flask, request, redirect, url_for, render_template_string, flash
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from sqlalchemy import func
 from werkzeug.utils import secure_filename
 import openai
+import redis
 
 from .models import db, Staff, Student, Job, Match
 
@@ -35,6 +39,12 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'change-me'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///career.db'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+openai.api_key = os.environ.get('OPENAI_API_KEY')
+REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
+REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
+REDIS_DB = int(os.environ.get('REDIS_DB', 0))
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB)
 
 db.init_app(app)
 
@@ -114,7 +124,7 @@ def index():
         <p><a href="{{url_for('add_student')}}">Add Student</a> |
         <a href="{{url_for('add_job')}}">Add Job</a> |
         <a href="{{url_for('create_match')}}">Create Match</a> |
-        {% if current_user.is_admin %}<a href="{{url_for('admin_matches')}}">Manage Matches</a> |{% endif %}
+
         <a href="{{url_for('logout')}}">Logout</a></p>
         <h3>Students</h3>
         <ul>{% for s in students %}<li>{{s.name}} - {{s.summary}}</li>{% endfor %}</ul>
@@ -189,12 +199,11 @@ def add_student():
         path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(path)
         summary = summarize_student(name, location, experience)
-        embedding = embed_text(summary)
-        embedding_str = ','.join(str(x) for x in embedding)
-        student = Student(name=name, location=location, experience=experience, resume_path=path,
-                          summary=summary, embedding=embedding_str)
+
         db.session.add(student)
         db.session.commit()
+        embedding = create_embedding(summary)
+        store_embedding(student.id, embedding)
         flash('Student added')
         return redirect(url_for('index'))
     return render_template_string('''
@@ -210,16 +219,43 @@ def add_student():
 # OpenAI summarization
 
 def summarize_student(name, location, experience):
-    api_key = os.environ.get('OPENAI_API_KEY')
-    if not api_key:
+    if not openai.api_key:
         return f"{name}, {location}: {experience[:50]}..."
-    openai.api_key = api_key
     prompt = f"Summarize student {name} from {location} with experience: {experience}"
     try:
         resp = openai.Completion.create(model='text-davinci-003', prompt=prompt, max_tokens=50)
         return resp.choices[0].text.strip()
     except Exception:
         return experience[:50]
+
+def create_embedding(text):
+    if not openai.api_key:
+        return None
+    try:
+        resp = openai.Embedding.create(model='text-embedding-ada-002', input=text)
+        return resp['data'][0]['embedding']
+    except Exception:
+        return None
+
+def store_embedding(student_id, embedding):
+    if embedding is not None:
+        redis_client.set(f'embedding:{student_id}', json.dumps(embedding))
+
+def get_embedding(student_id):
+    data = redis_client.get(f'embedding:{student_id}')
+    if data:
+        return json.loads(data)
+    return None
+
+def compute_similarity(vec1, vec2):
+    if not vec1 or not vec2:
+        return 0.0
+    dot = sum(a*b for a, b in zip(vec1, vec2))
+    norm1 = math.sqrt(sum(a*a for a in vec1))
+    norm2 = math.sqrt(sum(b*b for b in vec2))
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+    return dot / (norm1 * norm2)
 
 # Admin-only job creation
 @app.route('/jobs/new', methods=['GET', 'POST'])
@@ -273,6 +309,48 @@ def create_match():
             <input type="submit" value="Create Match">
         </form>
     ''', students=students, jobs=jobs)
+
+@app.route('/metrics')
+@login_required
+def metrics():
+    school = current_user.school
+    student_count = Student.query.filter_by(school=school).count()
+
+    placed_count = (
+        db.session.query(Student.id)
+        .join(Match, Student.id == Match.student_id)
+        .filter(Student.school == school)
+        .distinct()
+        .count()
+    )
+
+    placement_rate = placed_count / student_count if student_count else 0
+
+    students = Student.query.filter_by(school=school).all()
+    diffs = []
+    for s in students:
+        first_match = (
+            Match.query.filter_by(student_id=s.id)
+            .order_by(Match.created_at)
+            .first()
+        )
+        if first_match:
+            diffs.append((first_match.created_at - s.created_at).total_seconds() / 86400)
+
+    avg_time = sum(diffs) / len(diffs) if diffs else None
+    placement_rate_str = f"{placement_rate*100:.2f}%" if student_count else "N/A"
+    avg_time_str = f"{avg_time:.2f}" if avg_time is not None else "N/A"
+
+    return render_template_string('''
+        <h3>Metrics for {{ school }}</h3>
+        <table border="1">
+            <tr><th>Student Count</th><td>{{ student_count }}</td></tr>
+            <tr><th>Placement Rate</th><td>{{ placement_rate_str }}</td></tr>
+            <tr><th>Avg Days to Placement</th><td>{{ avg_time_str }}</td></tr>
+        </table>
+        <p><a href="{{ url_for('index') }}">Back</a></p>
+    ''', school=school, student_count=student_count,
+           placement_rate_str=placement_rate_str, avg_time_str=avg_time_str)
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -1,3 +1,4 @@
+from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -26,7 +27,6 @@ class Student(db.Model):
     experience = db.Column(db.Text)
     resume_path = db.Column(db.String(255))
     summary = db.Column(db.Text)
-    embedding = db.Column(db.Text)  # serialized list of floats
 
 class Job(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -38,8 +38,6 @@ class Match(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('student.id'))
     job_id = db.Column(db.Integer, db.ForeignKey('job.id'))
-    score = db.Column(db.Float, default=0.0)
-    finalized = db.Column(db.Boolean, default=False)
-    archived = db.Column(db.Boolean, default=False)
+
     student = db.relationship('Student')
     job = db.relationship('Job')

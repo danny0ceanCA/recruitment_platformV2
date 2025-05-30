@@ -12,10 +12,14 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-2. Set your OpenAI API key in the environment:
+2. Set your OpenAI API key and optional Redis connection in the environment:
 
 ```bash
 export OPENAI_API_KEY=your-key
+# Redis configuration (defaults shown)
+export REDIS_HOST=localhost
+export REDIS_PORT=6379
+export REDIS_DB=0
 ```
 
 3. Run the application:
@@ -36,5 +40,6 @@ If you update the models, delete the existing `career.db` to recreate the schema
 - Summaries of students are generated automatically using OpenAI when adding a student.
 - Student summaries are embedded using the OpenAI embeddings API to enable similarity scoring.
 - Admins can review queued matches at `/admin/matches`, ordered by similarity score, and finalize or archive them.
+
 
 Student resumes and summaries are stored in the database and `uploads/` folder. Jobs and matches are visible only to authenticated users, with job creation and matching restricted to admins.
