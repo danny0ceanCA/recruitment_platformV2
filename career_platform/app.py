@@ -199,7 +199,13 @@ def add_student():
         path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(path)
         summary = summarize_student(name, location, experience)
-
+        student = Student(
+            name=name,
+            location=location,
+            experience=experience,
+            resume_path=path,
+            summary=summary,
+        )
         db.session.add(student)
         db.session.commit()
         embedding = create_embedding(summary)
