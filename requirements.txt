@@ -6,3 +6,4 @@ werkzeug
 redis
 python-dotenv
 pytest
+Flask-WTF

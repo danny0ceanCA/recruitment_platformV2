@@ -2,6 +2,7 @@
 {% block title %}Register{% endblock %}
 {% block content %}
 <form method="post">
+    {{ form.csrf_token }}
     Username: <input name="username"><br>
     Password: <input name="password" type="password"><br>
     First Name: <input name="first_name"><br>

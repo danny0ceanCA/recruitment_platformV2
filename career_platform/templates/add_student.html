@@ -2,6 +2,7 @@
 {% block title %}Add Student{% endblock %}
 {% block content %}
 <form method="post" enctype="multipart/form-data">
+    {{ form.csrf_token }}
     Name: <input name="name"><br>
     Location: <input name="location"><br>
     Experience: <textarea name="experience"></textarea><br>

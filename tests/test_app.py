@@ -16,6 +16,7 @@ from career_platform.models import Student, Job, Match
 @pytest.fixture
 def client(tmp_path):
     app.config['TESTING'] = True
+    app.config['WTF_CSRF_ENABLED'] = False
     app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{tmp_path/'test.db'}"
     with app.app_context():
         db.drop_all()
