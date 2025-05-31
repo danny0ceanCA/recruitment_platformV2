@@ -28,12 +28,19 @@ def test_register_and_login(client):
     resp = client.post('/register', data={
         'username': 'user1',
         'password': 'pass',
+        'first_name': 'User',
+        'last_name': 'One',
+        'email': 'user1@example.com',
         'name': 'User One',
         'school': 'Test School'
     }, follow_redirects=True)
     assert b'Login' in resp.data
     with app.app_context():
-        assert Staff.query.filter_by(username='user1').first() is not None
+        staff = Staff.query.filter_by(username='user1').first()
+        assert staff is not None
+        assert staff.first_name == 'User'
+        assert staff.last_name == 'One'
+        assert staff.email == 'user1@example.com'
 
     # Login with the registered user
     resp = client.post('/login', data={
@@ -68,6 +75,9 @@ def test_school_and_match_fields(client):
     client.post('/register', data={
         'username': 'admin',
         'password': 'pass',
+        'first_name': 'Admin',
+        'last_name': 'User',
+        'email': 'admin@example.com',
         'name': 'Admin',
         'school': 'SchoolX',
         'is_admin': 'on'
@@ -111,6 +121,9 @@ def test_forgot_password_resets_password(client):
     client.post('/register', data={
         'username': 'reset',
         'password': 'old',
+        'first_name': 'Reset',
+        'last_name': 'User',
+        'email': 'reset@example.com',
         'name': 'Reset User',
         'school': 'Test'
     })
@@ -134,6 +147,9 @@ def test_update_password_logged_in(client):
     client.post('/register', data={
         'username': 'update',
         'password': 'old',
+        'first_name': 'Update',
+        'last_name': 'User',
+        'email': 'update@example.com',
         'name': 'Update User',
         'school': 'Test'
     })
