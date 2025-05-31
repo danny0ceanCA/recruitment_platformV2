@@ -15,6 +15,15 @@ import openai
 import redis
 
 from .models import db, Staff, Student, Job, Match
+from .forms import (
+    RegisterForm,
+    LoginForm,
+    ForgotPasswordForm,
+    UpdatePasswordForm,
+    StudentForm,
+    JobForm,
+    MatchForm,
+)
 
 # Helper to generate embeddings via OpenAI
 def embed_text(text):
@@ -78,53 +87,49 @@ def load_user(user_id):
 # Registration route
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        first_name = request.form.get('first_name')
-        last_name = request.form.get('last_name')
-        email = request.form.get('email')
-        name = request.form['name']
-        school = request.form['school']
-        is_admin = 'is_admin' in request.form
+    form = RegisterForm()
+    if form.validate_on_submit():
+        username = form.username.data
         if Staff.query.filter_by(username=username).first():
             flash('User exists')
         else:
             user = Staff(
                 username=username,
-                first_name=first_name,
-                last_name=last_name,
-                email=email,
-                name=name,
-                school=school,
-                is_admin=is_admin,
+                first_name=form.first_name.data,
+                last_name=form.last_name.data,
+                email=form.email.data,
+                name=form.name.data,
+                school=form.school.data,
+                is_admin=form.is_admin.data,
             )
-            user.set_password(password)
+            user.set_password(form.password.data)
             db.session.add(user)
             db.session.commit()
             flash('Registered')
             return redirect(url_for('login'))
-    return render_template('register.html')
+    return render_template('register.html', form=form)
 
 # Login route
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+    form = LoginForm()
+    if form.validate_on_submit():
+        username = form.username.data
+        password = form.password.data
         user = Staff.query.filter_by(username=username).first()
         if user and user.check_password(password):
             login_user(user)
             return redirect(url_for('index'))
         flash('Invalid credentials')
-    return render_template('login.html')
+    return render_template('login.html', form=form)
 
 # Forgot-password route
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
-    if request.method == 'POST':
-        username = request.form['username']
-        new_password = request.form['password']
+    form = ForgotPasswordForm()
+    if form.validate_on_submit():
+        username = form.username.data
+        new_password = form.password.data
         user = Staff.query.filter_by(username=username).first()
         if user:
             user.set_password(new_password)
@@ -133,13 +138,11 @@ def forgot_password():
             return redirect(url_for('login'))
         else:
             flash('User not found')
-    return render_template_string('''
-        <form method="post">
-            Username: <input name="username"><br>
-            New Password: <input name="password" type="password"><br>
-            <input type="submit" value="Reset Password">
-        </form>
-    ''')
+    return render_template_string(
+        '<form method="post">{{ form.csrf_token }}Username: {{ form.username }}<br>'
+        'New Password: {{ form.password }}<br>{{ form.submit }}</form>',
+        form=form,
+    )
 
 # Logout route
 @app.route('/logout')
@@ -152,18 +155,17 @@ def logout():
 @app.route('/update-password', methods=['GET', 'POST'])
 @login_required
 def update_password():
-    if request.method == 'POST':
-        new_password = request.form['password']
+    form = UpdatePasswordForm()
+    if form.validate_on_submit():
+        new_password = form.password.data
         current_user.set_password(new_password)
         db.session.commit()
         flash('Password updated')
         return redirect(url_for('index'))
-    return render_template_string('''
-        <form method="post">
-            New Password: <input name="password" type="password"><br>
-            <input type="submit" value="Update Password">
-        </form>
-    ''')
+    return render_template_string(
+        '<form method="post">{{ form.csrf_token }}New Password: {{ form.password }}<br>{{ form.submit }}</form>',
+        form=form,
+    )
 
 # Dashboard route
 @app.route('/')
@@ -215,23 +217,28 @@ def archive_match(match_id):
 @app.route('/students/new', methods=['GET', 'POST'])
 @login_required
 def add_student():
-    if request.method == 'POST':
-        name = request.form['name']
-        location = request.form['location']
-        experience = request.form['experience']
-        file = request.files['resume']
+    form = StudentForm()
+    if form.validate_on_submit():
+        file = form.resume.data
         filename = secure_filename(file.filename)
         path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(path)
-        summary = summarize_student(name, location, experience)
-        student = Student(name=name, location=location, experience=experience, resume_path=path, summary=summary, school=current_user.school)
+        summary = summarize_student(form.name.data, form.location.data, form.experience.data)
+        student = Student(
+            name=form.name.data,
+            location=form.location.data,
+            experience=form.experience.data,
+            resume_path=path,
+            summary=summary,
+            school=current_user.school,
+        )
         db.session.add(student)
         db.session.commit()
         embedding = create_embedding(summary)
         store_embedding(student.id, embedding)
         flash('Student added')
         return redirect(url_for('index'))
-    return render_template('add_student.html')
+    return render_template('add_student.html', form=form)
 
 # Summarize student via OpenAI
 def summarize_student(name, location, experience):
@@ -270,15 +277,14 @@ def add_job():
     if not current_user.is_admin:
         flash('Admins only')
         return redirect(url_for('index'))
-    if request.method == 'POST':
-        title = request.form['title']
-        description = request.form['description']
-        job = Job(title=title, description=description)
+    form = JobForm()
+    if form.validate_on_submit():
+        job = Job(title=form.title.data, description=form.description.data)
         db.session.add(job)
         db.session.commit()
         flash('Job added')
         return redirect(url_for('index'))
-    return render_template('add_job.html')
+    return render_template('add_job.html', form=form)
 
 # Create match route
 @app.route('/matches/new', methods=['GET', 'POST'])
@@ -289,20 +295,21 @@ def create_match():
         return redirect(url_for('index'))
     students = Student.query.all()
     jobs = Job.query.all()
-    if request.method == 'POST':
-        student_id = request.form['student_id']
-        job_id = request.form['job_id']
-        student = Student.query.get(student_id)
-        job = Job.query.get(job_id)
+    form = MatchForm()
+    form.student_id.choices = [(s.id, s.name) for s in students]
+    form.job_id.choices = [(j.id, j.title) for j in jobs]
+    if form.validate_on_submit():
+        student = Student.query.get(form.student_id.data)
+        job = Job.query.get(form.job_id.data)
         student_emb = get_embedding(student.id) or []
         job_emb = embed_text(job.description)
         score = cosine_similarity(student_emb, job_emb)
-        match = Match(student_id=student_id, job_id=job_id, score=score)
+        match = Match(student_id=student.id, job_id=job.id, score=score)
         db.session.add(match)
         db.session.commit()
         flash('Match created')
         return redirect(url_for('index'))
-    return render_template('create_match.html', students=students, jobs=jobs)
+    return render_template('create_match.html', form=form, students=students, jobs=jobs)
 
 # Metrics route
 @app.route('/metrics')
