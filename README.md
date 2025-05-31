@@ -45,3 +45,11 @@ If you update the models, delete the existing `career.db` to recreate the schema
 
 
 Student resumes and summaries are stored in the database and `uploads/` folder. Jobs and matches are visible only to authenticated users, with job creation and matching restricted to admins.
+
+## Scripts
+
+Use `promote_admin.py` to grant admin rights to an existing staff account:
+
+```bash
+python scripts/promote_admin.py <username-or-email>
+```
