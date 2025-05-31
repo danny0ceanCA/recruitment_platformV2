@@ -10,7 +10,7 @@ pytest.importorskip("redis")
 pytest.importorskip("openai")
 # dotenv is now optional in your app, so you don’t strictly need to skip on it
 
-from career_platform.app import app, db, Staff, summarize_student
+from career_platform.app import app, db, Staff, summarize_student, create_embedding
 from career_platform.models import Student, Job, Match
 
 @pytest.fixture
@@ -167,4 +167,30 @@ def test_update_password_logged_in(client):
         user = Staff.query.filter_by(username='update').first()
         assert user.password_hash != old_hash
         assert user.check_password('newpass')
+
+
+def test_openai_summary_and_embedding(monkeypatch):
+    import openai
+
+    # provide API key
+    monkeypatch.setattr(openai, 'api_key', 'test-key', raising=False)
+
+    class FakeResp:
+        def __init__(self, text=None, emb=None):
+            self.choices = [type('Choice', (), {'text': text})()] if text else []
+            self.data = [{'embedding': emb}] if emb else []
+
+    def fake_completion_create(**kwargs):
+        return FakeResp(text='summary')
+
+    def fake_embedding_create(**kwargs):
+        return {'data': [{'embedding': [1.0, 2.0]}]}
+
+    monkeypatch.setattr(openai, 'Completion', type('C', (), {'create': staticmethod(fake_completion_create)}))
+    monkeypatch.setattr(openai, 'Embedding', type('E', (), {'create': staticmethod(fake_embedding_create)}))
+
+    summary = summarize_student('Foo', 'Bar', 'Baz')
+    assert summary == 'summary'
+    embedding = create_embedding('text')
+    assert embedding == [1.0, 2.0]
 

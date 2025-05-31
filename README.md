@@ -12,7 +12,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-2. Set your OpenAI API key, Flask `SECRET_KEY`, and optional Redis connection in the environment:
+2. Set your OpenAI API key, Flask `SECRET_KEY`, and optional Redis connection in the environment. A valid `OPENAI_API_KEY` is required for the application to generate summaries and embeddings:
 
 ```bash
 export OPENAI_API_KEY=your-key
