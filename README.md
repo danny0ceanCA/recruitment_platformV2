@@ -43,6 +43,10 @@ If you update the models, delete the existing `career.db` to recreate the schema
 - Student summaries are embedded using the OpenAI embeddings API to enable similarity scoring.
 - Admins can review queued matches at `/admin/matches`, ordered by similarity score, and finalize or archive them.
 
+### Bulk Import
+
+Use `/students/bulk_upload` to import multiple students at once. Upload a CSV file with columns `name`, `location`, `experience`, and `resume` (a path to the resume file on the server). Each record will be processed and a success or failure message will be displayed.
+
 
 Student resumes and summaries are stored in the database and `uploads/` folder. Jobs and matches are visible only to authenticated users, with job creation and matching restricted to admins.
 
