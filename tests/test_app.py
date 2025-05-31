@@ -168,3 +168,40 @@ def test_update_password_logged_in(client):
         assert user.password_hash != old_hash
         assert user.check_password('newpass')
 
+
+def test_bulk_upload(client, tmp_path):
+    client.post('/register', data={
+        'username': 'bulk',
+        'password': 'pass',
+        'first_name': 'Bulk',
+        'last_name': 'User',
+        'email': 'bulk@example.com',
+        'name': 'Bulk User',
+        'school': 'Test'
+    }, follow_redirects=True)
+
+    client.post('/login', data={'username': 'bulk', 'password': 'pass'})
+
+    resume1 = tmp_path / 'r1.txt'
+    resume1.write_text('r1')
+    resume2 = tmp_path / 'r2.txt'
+    resume2.write_text('r2')
+    csv_file = tmp_path / 'students.csv'
+    csv_file.write_text(
+        'name,location,experience,resume\n' +
+        f"Alice,NY,Exp,{resume1}\n" +
+        f"Bob,SF,Exp2,{resume2}\n"
+    )
+
+    with open(csv_file, 'rb') as f:
+        client.post(
+            '/students/bulk_upload',
+            data={'csv_file': (f, 'students.csv')},
+            content_type='multipart/form-data',
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        assert Student.query.filter_by(name='Alice').first() is not None
+        assert Student.query.filter_by(name='Bob').first() is not None
+

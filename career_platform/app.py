@@ -9,6 +9,8 @@ import os
 import json
 import math
 import secrets
+import csv
+import io
 from flask import Flask, request, redirect, url_for, render_template, flash, render_template_string, jsonify
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
@@ -25,6 +27,7 @@ from .forms import (
     StudentForm,
     JobForm,
     MatchForm,
+    BulkUploadForm,
 )
 
 # Helper to generate embeddings via OpenAI
@@ -271,6 +274,48 @@ def add_student():
         flash('Student added')
         return redirect(url_for('index'))
     return render_template('add_student.html', form=form)
+
+# Bulk upload students via CSV
+@app.route('/students/bulk_upload', methods=['GET', 'POST'])
+@login_required
+def bulk_upload_students():
+    form = BulkUploadForm()
+    results = []
+    if form.validate_on_submit():
+        file = form.csv_file.data
+        stream = io.StringIO(file.stream.read().decode('utf-8'))
+        reader = csv.DictReader(stream)
+        for row in reader:
+            name = row.get('name') or ''
+            location = row.get('location') or ''
+            experience = row.get('experience') or ''
+            resume_path = row.get('resume') or row.get('resume_path')
+            if not resume_path:
+                results.append(f"Missing resume for {name}")
+                continue
+            try:
+                filename = secure_filename(os.path.basename(resume_path))
+                dest_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                with open(resume_path, 'rb') as src, open(dest_path, 'wb') as dst:
+                    dst.write(src.read())
+                summary = summarize_student(name, location, experience)
+                student = Student(
+                    name=name,
+                    location=location,
+                    experience=experience,
+                    resume_path=dest_path,
+                    summary=summary,
+                    school=current_user.school,
+                )
+                db.session.add(student)
+                db.session.commit()
+                embedding = create_embedding(summary)
+                store_embedding(student.id, embedding)
+                results.append(f"Added {name}")
+            except Exception as e:
+                db.session.rollback()
+                results.append(f"Failed {name}: {e}")
+    return render_template('bulk_upload.html', form=form, results=results)
 
 # Summarize student via OpenAI
 def summarize_student(name, location, experience):

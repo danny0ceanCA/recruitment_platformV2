@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Bulk Upload{% endblock %}
+{% block content %}
+<form method="post" enctype="multipart/form-data">
+    {{ form.csrf_token }}
+    {{ form.csv_file.label }} {{ form.csv_file }}<br>
+    {{ form.submit }}
+</form>
+{% if results %}
+<ul>
+    {% for msg in results %}
+    <li>{{ msg }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

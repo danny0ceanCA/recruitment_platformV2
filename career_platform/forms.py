@@ -50,3 +50,9 @@ class MatchForm(FlaskForm):
     student_id = SelectField('Student', coerce=int, validators=[DataRequired()])
     job_id = SelectField('Job', coerce=int, validators=[DataRequired()])
     submit = SubmitField('Create Match')
+
+
+class BulkUploadForm(FlaskForm):
+    """Upload a CSV file of students."""
+    csv_file = FileField('CSV File', validators=[DataRequired()])
+    submit = SubmitField('Upload')
