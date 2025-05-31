@@ -24,7 +24,15 @@ from flask import (
 
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
-import openai
+
+try:
+    import openai
+    from openai.error import OpenAIError
+except Exception:  # pragma: no cover - library may be missing
+    openai = None
+
+    class OpenAIError(Exception):
+        pass
 import redis
 from sqlalchemy import func
 
@@ -44,13 +52,13 @@ from .forms import (
 # Helper to generate embeddings via OpenAI
 def embed_text(text):
     api_key = os.environ.get('OPENAI_API_KEY')
-    if not api_key:
+    if not openai or not api_key:
         return []
     openai.api_key = api_key
     try:
         resp = openai.Embedding.create(model='text-embedding-ada-002', input=[text])
         return resp['data'][0]['embedding']
-    except Exception:
+    except OpenAIError:
         return []
 
 # Compute cosine similarity between two vectors
@@ -83,7 +91,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///career.db'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Configure OpenAI and Redis
-openai.api_key = os.environ.get('OPENAI_API_KEY')
+if openai:
+    openai.api_key = os.environ.get('OPENAI_API_KEY')
 REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
 REDIS_DB = int(os.environ.get('REDIS_DB', 0))
@@ -330,23 +339,23 @@ def bulk_upload_students():
 
 # Summarize student via OpenAI
 def summarize_student(name, location, experience):
-    if not openai.api_key:
+    if not openai or not openai.api_key:
         return f"{name}, {location}: {experience[:50]}..."
     prompt = f"Summarize student {name} from {location} with experience: {experience}"
     try:
         resp = openai.Completion.create(model='text-davinci-003', prompt=prompt, max_tokens=50)
         return resp.choices[0].text.strip()
-    except Exception:
+    except OpenAIError:
         return experience[:50]
 
 # Create embedding via OpenAI
 def create_embedding(text):
-    if not openai.api_key:
+    if not openai or not openai.api_key:
         return None
     try:
         resp = openai.Embedding.create(model='text-embedding-ada-002', input=text)
         return resp['data'][0]['embedding']
-    except Exception:
+    except OpenAIError:
         return None
 
 # Store embedding in Redis
