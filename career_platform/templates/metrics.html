@@ -6,6 +6,19 @@
     <tr><th>Student Count</th><td>{{ student_count }}</td></tr>
     <tr><th>Placement Rate</th><td>{{ placement_rate_str }}</td></tr>
     <tr><th>Avg Days to Placement</th><td>{{ avg_time_str }}</td></tr>
+    <tr><th>Avg Finalized Score</th><td>{{ avg_score_str }}</td></tr>
+</table>
+<h4>Matches by Job</h4>
+<table border="1">
+    <tr><th>Job</th><th>Queued</th><th>Finalized</th><th>Archived</th></tr>
+    {% for stat in job_stats %}
+    <tr>
+        <td>{{ stat.job.title }}</td>
+        <td>{{ stat.queued }}</td>
+        <td>{{ stat.finalized }}</td>
+        <td>{{ stat.archived }}</td>
+    </tr>
+    {% endfor %}
 </table>
 <p><a href="{{ url_for('index') }}">Back</a></p>
 {% endblock %}
