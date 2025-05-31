@@ -41,10 +41,22 @@ class StudentForm(FlaskForm):
     resume = FileField('Resume', validators=[DataRequired()])
     submit = SubmitField('Add')
 
+class EditStudentForm(FlaskForm):
+    name = StringField('Name', validators=[DataRequired()])
+    location = StringField('Location', validators=[DataRequired()])
+    experience = TextAreaField('Experience', validators=[DataRequired()])
+    resume = FileField('Resume')
+    submit = SubmitField('Update')
+
 class JobForm(FlaskForm):
     title = StringField('Title', validators=[DataRequired()])
     description = TextAreaField('Description', validators=[DataRequired()])
     submit = SubmitField('Add Job')
+
+class EditJobForm(FlaskForm):
+    title = StringField('Title', validators=[DataRequired()])
+    description = TextAreaField('Description', validators=[DataRequired()])
+    submit = SubmitField('Update Job')
 
 class MatchForm(FlaskForm):
     student_id = SelectField('Student', coerce=int, validators=[DataRequired()])

@@ -23,7 +23,9 @@ from .forms import (
     ResetPasswordForm,
     UpdatePasswordForm,
     StudentForm,
+    EditStudentForm,
     JobForm,
+    EditJobForm,
     MatchForm,
 )
 
@@ -272,6 +274,47 @@ def add_student():
         return redirect(url_for('index'))
     return render_template('add_student.html', form=form)
 
+# Edit student
+@app.route('/students/<int:student_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_student(student_id):
+    if not current_user.is_admin:
+        flash('Admins only')
+        return redirect(url_for('index'))
+    student = Student.query.get_or_404(student_id)
+    form = EditStudentForm(obj=student)
+    if form.validate_on_submit():
+        student.name = form.name.data
+        student.location = form.location.data
+        student.experience = form.experience.data
+        if form.resume.data:
+            file = form.resume.data
+            filename = secure_filename(file.filename)
+            path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(path)
+            student.resume_path = path
+        summary = summarize_student(form.name.data, form.location.data, form.experience.data)
+        student.summary = summary
+        db.session.commit()
+        embedding = create_embedding(summary)
+        store_embedding(student.id, embedding)
+        flash('Student updated')
+        return redirect(url_for('index'))
+    return render_template('edit_student.html', form=form, student=student)
+
+# Delete student
+@app.route('/students/<int:student_id>/delete')
+@login_required
+def delete_student(student_id):
+    if not current_user.is_admin:
+        flash('Admins only')
+        return redirect(url_for('index'))
+    student = Student.query.get_or_404(student_id)
+    db.session.delete(student)
+    db.session.commit()
+    flash('Student deleted')
+    return redirect(url_for('index'))
+
 # Summarize student via OpenAI
 def summarize_student(name, location, experience):
     if not openai.api_key:
@@ -317,6 +360,36 @@ def add_job():
         flash('Job added')
         return redirect(url_for('index'))
     return render_template('add_job.html', form=form)
+
+# Edit job
+@app.route('/jobs/<int:job_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_job(job_id):
+    if not current_user.is_admin:
+        flash('Admins only')
+        return redirect(url_for('index'))
+    job = Job.query.get_or_404(job_id)
+    form = EditJobForm(obj=job)
+    if form.validate_on_submit():
+        job.title = form.title.data
+        job.description = form.description.data
+        db.session.commit()
+        flash('Job updated')
+        return redirect(url_for('index'))
+    return render_template('edit_job.html', form=form, job=job)
+
+# Delete job
+@app.route('/jobs/<int:job_id>/delete')
+@login_required
+def delete_job(job_id):
+    if not current_user.is_admin:
+        flash('Admins only')
+        return redirect(url_for('index'))
+    job = Job.query.get_or_404(job_id)
+    db.session.delete(job)
+    db.session.commit()
+    flash('Job deleted')
+    return redirect(url_for('index'))
 
 # Create match route
 @app.route('/matches/new', methods=['GET', 'POST'])
