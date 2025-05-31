@@ -8,7 +8,8 @@ except ImportError:
 import os
 import json
 import math
-from flask import Flask, request, redirect, url_for, render_template, flash, render_template_string
+import secrets
+from flask import Flask, request, redirect, url_for, render_template, flash, render_template_string, jsonify
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
 import openai
@@ -19,6 +20,7 @@ from .forms import (
     RegisterForm,
     LoginForm,
     ForgotPasswordForm,
+    ResetPasswordForm,
     UpdatePasswordForm,
     StudentForm,
     JobForm,
@@ -47,6 +49,14 @@ def cosine_similarity(a, b):
     if norm_a == 0 or norm_b == 0:
         return 0.0
     return dot / (norm_a * norm_b)
+
+# Send reset tokens via email or console for testing
+def send_reset_email(recipient, token):
+    """Send the reset token to the user.
+
+    In testing mode the token is simply printed so tests can capture it."""
+    message = f"Password reset token for {recipient}: {token}"
+    print(message)
 
 # Ensure upload directory exists
 UPLOAD_FOLDER = 'uploads'
@@ -123,24 +133,46 @@ def login():
         flash('Invalid credentials')
     return render_template('login.html', form=form)
 
-# Forgot-password route
+# Forgot-password route - request a reset token
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
     form = ForgotPasswordForm()
     if form.validate_on_submit():
         username = form.username.data
-        new_password = form.password.data
         user = Staff.query.filter_by(username=username).first()
         if user:
-            user.set_password(new_password)
-            db.session.commit()
-            flash('Password updated')
+            token = secrets.token_urlsafe(16)
+            redis_client.setex(f'reset:{token}', 3600, user.id)
+            send_reset_email(user.email, token)
+            if app.config.get('TESTING'):
+                return jsonify({'token': token})
+            flash('Reset instructions sent')
             return redirect(url_for('login'))
         else:
             flash('User not found')
     return render_template_string(
-        '<form method="post">{{ form.csrf_token }}Username: {{ form.username }}<br>'
-        'New Password: {{ form.password }}<br>{{ form.submit }}</form>',
+        '<form method="post">{{ form.csrf_token }}Username: {{ form.username }}<br>{{ form.submit }}</form>',
+        form=form,
+    )
+
+# Reset password using token
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    form = ResetPasswordForm()
+    user_id = redis_client.get(f'reset:{token}')
+    if not user_id:
+        flash('Invalid or expired token')
+        return redirect(url_for('forgot_password'))
+    if form.validate_on_submit():
+        user = Staff.query.get(int(user_id))
+        if user:
+            user.set_password(form.password.data)
+            db.session.commit()
+            redis_client.delete(f'reset:{token}')
+            flash('Password updated')
+            return redirect(url_for('login'))
+    return render_template_string(
+        '<form method="post">{{ form.csrf_token }}New Password: {{ form.password }}<br>{{ form.submit }}</form>',
         form=form,
     )
 

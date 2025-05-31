@@ -18,8 +18,15 @@ class LoginForm(FlaskForm):
     password = PasswordField('Password', validators=[DataRequired()])
     submit = SubmitField('Login')
 
+
 class ForgotPasswordForm(FlaskForm):
+    """Request a password reset token."""
     username = StringField('Username', validators=[DataRequired()])
+    submit = SubmitField('Request Reset')
+
+
+class ResetPasswordForm(FlaskForm):
+    """Reset the password using a valid token."""
     password = PasswordField('New Password', validators=[DataRequired()])
     submit = SubmitField('Reset Password')
 
