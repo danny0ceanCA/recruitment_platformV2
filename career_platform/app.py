@@ -81,13 +81,24 @@ def register():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        first_name = request.form.get('first_name')
+        last_name = request.form.get('last_name')
+        email = request.form.get('email')
         name = request.form['name']
         school = request.form['school']
         is_admin = 'is_admin' in request.form
         if Staff.query.filter_by(username=username).first():
             flash('User exists')
         else:
-            user = Staff(username=username, name=name, school=school, is_admin=is_admin)
+            user = Staff(
+                username=username,
+                first_name=first_name,
+                last_name=last_name,
+                email=email,
+                name=name,
+                school=school,
+                is_admin=is_admin,
+            )
             user.set_password(password)
             db.session.add(user)
             db.session.commit()
