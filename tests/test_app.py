@@ -10,7 +10,7 @@ pytest.importorskip("redis")
 pytest.importorskip("openai")
 # dotenv is now optional in your app, so you don’t strictly need to skip on it
 
-from career_platform.app import app, db, Staff, summarize_student
+from career_platform.app import app, db, Staff, summarize_student, create_embedding
 from career_platform.models import Student, Job, Match
 
 @pytest.fixture
@@ -167,6 +167,42 @@ def test_update_password_logged_in(client):
         user = Staff.query.filter_by(username='update').first()
         assert user.password_hash != old_hash
         assert user.check_password('newpass')
+        
+def test_bulk_upload(client, tmp_path):
+    client.post('/register', data={
+        'username': 'bulk',
+        'password': 'pass',
+        'first_name': 'Bulk',
+        'last_name': 'User',
+        'email': 'bulk@example.com',
+        'name': 'Bulk User',
+        'school': 'Test'
+    }, follow_redirects=True)
+
+    client.post('/login', data={'username': 'bulk', 'password': 'pass'})
+
+    resume1 = tmp_path / 'r1.txt'
+    resume1.write_text('r1')
+    resume2 = tmp_path / 'r2.txt'
+    resume2.write_text('r2')
+    csv_file = tmp_path / 'students.csv'
+    csv_file.write_text(
+        'name,location,experience,resume\n' +
+        f"Alice,NY,Exp,{resume1}\n" +
+        f"Bob,SF,Exp2,{resume2}\n"
+    )
+
+    with open(csv_file, 'rb') as f:
+        client.post(
+            '/students/bulk_upload',
+            data={'csv_file': (f, 'students.csv')},
+            content_type='multipart/form-data',
+            follow_redirects=True,
+        )
+
+    with app.app_context():
+        assert Student.query.filter_by(name='Alice').first() is not None
+        assert Student.query.filter_by(name='Bob').first() is not None
 
 def setup_admin_and_student_job(client):
     client.post('/register', data={
@@ -242,6 +278,31 @@ def test_non_admin_cannot_edit_or_delete(client):
     with app.app_context():
         assert Student.query.get(student.id) is not None
         assert Job.query.get(job.id) is not None
+
+def test_openai_summary_and_embedding(monkeypatch):
+    import openai
+
+    # provide API key
+    monkeypatch.setattr(openai, 'api_key', 'test-key', raising=False)
+
+    class FakeResp:
+        def __init__(self, text=None, emb=None):
+            self.choices = [type('Choice', (), {'text': text})()] if text else []
+            self.data = [{'embedding': emb}] if emb else []
+
+    def fake_completion_create(**kwargs):
+        return FakeResp(text='summary')
+
+    def fake_embedding_create(**kwargs):
+        return {'data': [{'embedding': [1.0, 2.0]}]}
+
+    monkeypatch.setattr(openai, 'Completion', type('C', (), {'create': staticmethod(fake_completion_create)}))
+    monkeypatch.setattr(openai, 'Embedding', type('E', (), {'create': staticmethod(fake_embedding_create)}))
+
+    summary = summarize_student('Foo', 'Bar', 'Baz')
+    assert summary == 'summary'
+    embedding = create_embedding('text')
+    assert embedding == [1.0, 2.0]
 
 def test_metrics_calculations(client):
     client.post('/register', data={

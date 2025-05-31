@@ -9,6 +9,8 @@ import os
 import json
 import math
 import secrets
+import csv
+import io
 from flask import (
     Flask,
     request,
@@ -19,9 +21,18 @@ from flask import (
     render_template_string,
     jsonify,
 )
+
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
-import openai
+
+try:
+    import openai
+    from openai.error import OpenAIError
+except Exception:  # pragma: no cover - library may be missing
+    openai = None
+
+    class OpenAIError(Exception):
+        pass
 import redis
 from sqlalchemy import func
 
@@ -37,18 +48,19 @@ from .forms import (
     JobForm,
     EditJobForm,
     MatchForm,
+    BulkUploadForm,
 )
 
 # Helper to generate embeddings via OpenAI
 def embed_text(text):
     api_key = os.environ.get('OPENAI_API_KEY')
-    if not api_key:
+    if not openai or not api_key:
         return []
     openai.api_key = api_key
     try:
         resp = openai.Embedding.create(model='text-embedding-ada-002', input=[text])
         return resp['data'][0]['embedding']
-    except Exception:
+    except OpenAIError:
         return []
 
 # Compute cosine similarity between two vectors
@@ -81,7 +93,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///career.db'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Configure OpenAI and Redis
-openai.api_key = os.environ.get('OPENAI_API_KEY')
+if openai:
+    openai.api_key = os.environ.get('OPENAI_API_KEY')
 REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
 REDIS_DB = int(os.environ.get('REDIS_DB', 0))
@@ -325,25 +338,67 @@ def delete_student(student_id):
     flash('Student deleted')
     return redirect(url_for('index'))
 
+# Bulk upload students via CSV
+@app.route('/students/bulk_upload', methods=['GET', 'POST'])
+@login_required
+def bulk_upload_students():
+    form = BulkUploadForm()
+    results = []
+    if form.validate_on_submit():
+        file = form.csv_file.data
+        stream = io.StringIO(file.stream.read().decode('utf-8'))
+        reader = csv.DictReader(stream)
+        for row in reader:
+            name = row.get('name') or ''
+            location = row.get('location') or ''
+            experience = row.get('experience') or ''
+            resume_path = row.get('resume') or row.get('resume_path')
+            if not resume_path:
+                results.append(f"Missing resume for {name}")
+                continue
+            try:
+                filename = secure_filename(os.path.basename(resume_path))
+                dest_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                with open(resume_path, 'rb') as src, open(dest_path, 'wb') as dst:
+                    dst.write(src.read())
+                summary = summarize_student(name, location, experience)
+                student = Student(
+                    name=name,
+                    location=location,
+                    experience=experience,
+                    resume_path=dest_path,
+                    summary=summary,
+                    school=current_user.school,
+                )
+                db.session.add(student)
+                db.session.commit()
+                embedding = create_embedding(summary)
+                store_embedding(student.id, embedding)
+                results.append(f"Added {name}")
+            except Exception as e:
+                db.session.rollback()
+                results.append(f"Failed {name}: {e}")
+    return render_template('bulk_upload.html', form=form, results=results)
+
 # Summarize student via OpenAI
 def summarize_student(name, location, experience):
-    if not openai.api_key:
+    if not openai or not openai.api_key:
         return f"{name}, {location}: {experience[:50]}..."
     prompt = f"Summarize student {name} from {location} with experience: {experience}"
     try:
         resp = openai.Completion.create(model='text-davinci-003', prompt=prompt, max_tokens=50)
         return resp.choices[0].text.strip()
-    except Exception:
+    except OpenAIError:
         return experience[:50]
 
 # Create embedding via OpenAI
 def create_embedding(text):
-    if not openai.api_key:
+    if not openai or not openai.api_key:
         return None
     try:
         resp = openai.Embedding.create(model='text-embedding-ada-002', input=text)
         return resp['data'][0]['embedding']
-    except Exception:
+    except OpenAIError:
         return None
 
 # Store embedding in Redis
