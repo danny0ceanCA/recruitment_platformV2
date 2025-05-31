@@ -53,3 +53,13 @@ Use `promote_admin.py` to grant admin rights to an existing staff account:
 ```bash
 python scripts/promote_admin.py <username-or-email>
 ```
+
+## Metrics
+
+Authenticated staff can view overall statistics at `/metrics`:
+
+- Student count for the logged in user's school.
+- Placement rate (percentage of students with at least one match).
+- Average days from student creation to first match.
+- Average similarity score of finalized matches.
+- Per-job counts of queued, finalized and archived matches.

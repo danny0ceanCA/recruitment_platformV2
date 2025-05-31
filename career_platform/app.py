@@ -9,11 +9,21 @@ import os
 import json
 import math
 import secrets
-from flask import Flask, request, redirect, url_for, render_template, flash, render_template_string, jsonify
+from flask import (
+    Flask,
+    request,
+    redirect,
+    url_for,
+    render_template,
+    flash,
+    render_template_string,
+    jsonify,
+)
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
 import openai
 import redis
+from sqlalchemy import func
 
 from .models import db, Staff, Student, Job, Match
 from .forms import (
@@ -441,7 +451,32 @@ def metrics():
     avg_time = sum(diffs) / len(diffs) if diffs else None
     placement_rate_str = f"{placement_rate*100:.2f}%" if student_count else "N/A"
     avg_time_str = f"{avg_time:.2f}" if avg_time is not None else "N/A"
-    return render_template('metrics.html', school=school, student_count=student_count, placement_rate_str=placement_rate_str, avg_time_str=avg_time_str)
+
+    jobs = Job.query.all()
+    job_stats = []
+    for job in jobs:
+        queued = Match.query.filter_by(job_id=job.id, finalized=False, archived=False).count()
+        finalized_count = Match.query.filter_by(job_id=job.id, finalized=True, archived=False).count()
+        archived = Match.query.filter_by(job_id=job.id, archived=True).count()
+        job_stats.append({
+            'job': job,
+            'queued': queued,
+            'finalized': finalized_count,
+            'archived': archived,
+        })
+
+    avg_score = db.session.query(func.avg(Match.score)).filter(Match.finalized == True).scalar()
+    avg_score_str = f"{avg_score:.2f}" if avg_score is not None else "N/A"
+
+    return render_template(
+        'metrics.html',
+        school=school,
+        student_count=student_count,
+        placement_rate_str=placement_rate_str,
+        avg_time_str=avg_time_str,
+        job_stats=job_stats,
+        avg_score_str=avg_score_str,
+    )
 
 if __name__ == '__main__':
     app.run(debug=True)
