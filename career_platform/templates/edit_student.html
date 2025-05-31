@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block title %}Edit Student{% endblock %}
+{% block content %}
+<form method="post" enctype="multipart/form-data">
+    {{ form.csrf_token }}
+    Name: {{ form.name() }}<br>
+    Location: {{ form.location() }}<br>
+    Experience: {{ form.experience() }}<br>
+    Resume: {{ form.resume() }}<br>
+    {{ form.submit() }}
+</form>
+{% endblock %}

@@ -204,6 +204,81 @@ def test_bulk_upload(client, tmp_path):
         assert Student.query.filter_by(name='Alice').first() is not None
         assert Student.query.filter_by(name='Bob').first() is not None
 
+def setup_admin_and_student_job(client):
+    client.post('/register', data={
+        'username': 'admin',
+        'password': 'pass',
+        'first_name': 'Admin',
+        'last_name': 'User',
+        'email': 'admin@example.com',
+        'name': 'Admin',
+        'school': 'SchoolX',
+        'is_admin': 'on'
+    }, follow_redirects=True)
+    client.post('/login', data={'username': 'admin', 'password': 'pass'}, follow_redirects=True)
+    client.post('/jobs/new', data={'title': 'Job1', 'description': 'desc'}, follow_redirects=True)
+    import io
+    client.post('/students/new', data={
+        'name': 'Bob',
+        'location': 'NY',
+        'experience': 'Python',
+        'resume': (io.BytesIO(b'data'), 'resume.txt')
+    }, content_type='multipart/form-data', follow_redirects=True)
+    with app.app_context():
+        student = Student.query.filter_by(name='Bob').first()
+        job = Job.query.filter_by(title='Job1').first()
+    return student, job
+
+
+def test_admin_edit_and_delete(client):
+    student, job = setup_admin_and_student_job(client)
+    client.post(f'/students/{student.id}/edit', data={
+        'name': 'Bob2',
+        'location': 'LA',
+        'experience': 'Go',
+    }, content_type='multipart/form-data', follow_redirects=True)
+    client.post(f'/jobs/{job.id}/edit', data={
+        'title': 'Job2',
+        'description': 'new',
+    }, follow_redirects=True)
+    with app.app_context():
+        student = Student.query.get(student.id)
+        job = Job.query.get(job.id)
+        assert student.name == 'Bob2'
+        assert student.location == 'LA'
+        assert job.title == 'Job2'
+
+    client.get(f'/students/{student.id}/delete', follow_redirects=True)
+    client.get(f'/jobs/{job.id}/delete', follow_redirects=True)
+    with app.app_context():
+        assert Student.query.get(student.id) is None
+        assert Job.query.get(job.id) is None
+
+
+def test_non_admin_cannot_edit_or_delete(client):
+    student, job = setup_admin_and_student_job(client)
+    client.get('/logout')
+    client.post('/register', data={
+        'username': 'user',
+        'password': 'pass',
+        'name': 'User',
+        'school': 'SchoolX'
+    }, follow_redirects=True)
+    client.post('/login', data={'username': 'user', 'password': 'pass'}, follow_redirects=True)
+
+    resp = client.post(f'/students/{student.id}/edit', data={'name': 'X', 'location': 'Y', 'experience': 'Z'}, follow_redirects=True)
+    assert b'Admins only' in resp.data
+    resp = client.get(f'/students/{student.id}/delete', follow_redirects=True)
+    assert b'Admins only' in resp.data
+    resp = client.post(f'/jobs/{job.id}/edit', data={'title': 'X', 'description': 'Y'}, follow_redirects=True)
+    assert b'Admins only' in resp.data
+    resp = client.get(f'/jobs/{job.id}/delete', follow_redirects=True)
+    assert b'Admins only' in resp.data
+
+    with app.app_context():
+        assert Student.query.get(student.id) is not None
+        assert Job.query.get(job.id) is not None
+
 def test_openai_summary_and_embedding(monkeypatch):
     import openai
 
