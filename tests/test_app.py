@@ -133,10 +133,10 @@ def test_forgot_password_resets_password(client):
         user = Staff.query.filter_by(username='reset').first()
         old_hash = user.password_hash
 
-    client.post('/forgot-password', data={
-        'username': 'reset',
-        'password': 'newpass'
-    }, follow_redirects=True)
+    resp = client.post('/forgot-password', data={'username': 'reset'})
+    token = resp.get_json()['token']
+
+    client.post(f'/reset-password/{token}', data={'password': 'newpass'}, follow_redirects=True)
 
     with app.app_context():
         user = Staff.query.filter_by(username='reset').first()
