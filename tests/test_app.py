@@ -168,3 +168,57 @@ def test_update_password_logged_in(client):
         assert user.password_hash != old_hash
         assert user.check_password('newpass')
 
+
+def test_metrics_calculations(client):
+    client.post('/register', data={
+        'username': 'adminm',
+        'password': 'pass',
+        'first_name': 'Admin',
+        'last_name': 'User',
+        'email': 'adminm@example.com',
+        'name': 'Admin',
+        'school': 'MetricsU',
+        'is_admin': 'on'
+    }, follow_redirects=True)
+
+    client.post('/login', data={'username': 'adminm', 'password': 'pass'}, follow_redirects=True)
+
+    client.post('/jobs/new', data={'title': 'Job1', 'description': 'd'}, follow_redirects=True)
+
+    import io
+    client.post('/students/new', data={
+        'name': 'A',
+        'location': 'NY',
+        'experience': 'exp',
+        'resume': (io.BytesIO(b'data'), 'r1.txt')
+    }, content_type='multipart/form-data', follow_redirects=True)
+
+    client.post('/students/new', data={
+        'name': 'B',
+        'location': 'NY',
+        'experience': 'exp',
+        'resume': (io.BytesIO(b'data'), 'r2.txt')
+    }, content_type='multipart/form-data', follow_redirects=True)
+
+    with app.app_context():
+        job = Job.query.filter_by(title='Job1').first()
+        s1 = Student.query.filter_by(name='A').first()
+        s2 = Student.query.filter_by(name='B').first()
+
+    client.post('/matches/new', data={'student_id': s1.id, 'job_id': job.id}, follow_redirects=True)
+    resp = client.post('/matches/new', data={'student_id': s2.id, 'job_id': job.id}, follow_redirects=True)
+    with app.app_context():
+        m2 = Match.query.filter_by(student_id=s2.id, job_id=job.id).order_by(Match.id.desc()).first()
+    client.get(f'/matches/{m2.id}/finalize', follow_redirects=True)
+
+    resp = client.post('/matches/new', data={'student_id': s1.id, 'job_id': job.id}, follow_redirects=True)
+    with app.app_context():
+        m3 = Match.query.filter_by(student_id=s1.id).order_by(Match.id.desc()).first()
+    client.get(f'/matches/{m3.id}/archive', follow_redirects=True)
+
+    metrics_resp = client.get('/metrics')
+    text = metrics_resp.get_data(as_text=True)
+    assert 'Avg Finalized Score' in text
+    assert 'Job1' in text
+    assert '<td>1</td><td>1</td><td>1</td>' in text.replace('\n', '')
+
